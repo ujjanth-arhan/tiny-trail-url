@@ -1,0 +1,30 @@
+The aim of the project to create sharable URL shortners.
+
+AIR: $(go env GOPATH)/bin/air
+
+SQL Server Image: docker pull mcr.microsoft.com/mssql/server:2022-latest
+
+docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=<YourStrong@Passw0rd>" \
+   -p 1433:1433 --name sql1 --hostname sql1 \
+   -d \
+   mcr.microsoft.com/mssql/server:2022-latest
+
+Note: Please substitute <YourStrong@Passw0rd> with a strong password
+Note: Your password should follow the SQL Server default password policy, otherwise the container can't set up SQL Server, and stops working. By default, the password must be at least eight characters long and contain characters from three of the following four sets: uppercase letters, lowercase letters, base-10 digits, and symbols.
+
+docker exec -it sql1 "bash"
+
+sudo /opt/mssql-tools/bin/sqlcmd -S localhost -U <userid> -P "<YourNewStrong@Passw0rd>"
+
+
+docker exec -it sql1 "bash"
+/opt/mssql-tools/bin/sqlcmd -S localhost -U <userid> -P "<YourStrong@Passw0rd>"
+
+CREATE DATABASE TestDB;
+
+SELECT Name from sys.databases;
+
+GO
+
+Note: QUIT to quit sqlcmd
+NOte: exit to exit the interactive terminal

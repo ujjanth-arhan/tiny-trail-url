@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/ujjanth-arhan/tiny-trail-url/repository"
 )
 
 func main() {
@@ -11,6 +13,7 @@ func main() {
 	slog.Info("Logger Initialized!")
 
 	RegisterRoutes()
+	repository.SetupRepositories()
 
 	port := "8080"
 	slog.Info("Starting server on port " + port + "!")
