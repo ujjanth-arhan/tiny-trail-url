@@ -6,53 +6,46 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
 
 	_ "github.com/microsoft/go-mssqldb"
 )
 
-func SetupRepositories() {
+var db *sql.DB
+
+func SetupDatabase() {
 	query := url.Values{}
-	query.Add("app name", "TinyTrail")
 	u := &url.URL{
 		Scheme: "sqlserver",
-		User:   url.UserPassword("sa", "<YourStrong@Passw0rd>"),
-		Host:   fmt.Sprintf("%s:%d", "localhost", 1433),
+		User:   url.UserPassword("sa", os.Getenv("DB_SA_PASSWORD")),
+		Host:   fmt.Sprintf("%s:%s", os.Getenv("HOST_NAME"), os.Getenv("DB_PORT")),
 	}
 
 	slog.Info("Query String:" + u.String())
-	db, initErr := sql.Open("sqlserver", u.String())
+	dbConnection, initErr := sql.Open("sqlserver", u.String())
 	if initErr != nil {
 		slog.Error("Unable to initialize DB connection query ", initErr)
 	}
 
-	if pingErr := db.PingContext(context.Background()); pingErr != nil {
-		slog.Error("Failed to establish connection to database ", pingErr)
-	}
-
-	dbStmt, dbStmtErr := db.PrepareContext(context.Background(), "IF DB_ID('TinyTrail') IS NULL BEGIN CREATE DATABASE TinyTrail END ELSE PRINT 'DATABASE ALREADY EXISTS';")
-	if dbStmtErr != nil {
-		slog.Error("Failed to create database ", dbStmtErr)
-	}
-
-	_, execErr := dbStmt.ExecContext(context.Background())
+	/*
+	* SQL Server does not support parameters for create database query
+	 */
+	_, execErr := dbConnection.ExecContext(context.Background(), fmt.Sprintf("IF DB_ID('%s') IS NULL BEGIN CREATE DATABASE %s END ELSE PRINT 'DATABASE ALREADY EXISTS';", os.Getenv("DB_NAME"), os.Getenv("DB_NAME")))
 	if execErr != nil {
 		slog.Error("Failed to execute query ", execErr)
 	}
-	db.Close()
 
-	query.Add("database", "TinyTrail")
+	dbConnection.Close()
+
+	query.Add("database", os.Getenv("DB_NAME"))
 	u.RawQuery = query.Encode()
 
-	db, initErr = sql.Open("sqlserver", u.String())
+	dbConnection, initErr = sql.Open("sqlserver", u.String())
 	if initErr != nil {
 		slog.Error("Unable to initialize TT DB connection query ", initErr)
 	}
 
-	if pingErr := db.PingContext(context.Background()); pingErr != nil {
-		slog.Error("Failed to establish connection to TT database ", pingErr)
-	}
-
-	tblStmt, tblStmtErr := db.PrepareContext(context.Background(), "IF OBJECT_ID('dbo.Urls') IS NULL BEGIN CREATE TABLE dbo.Urls (ID INT PRIMARY KEY, OriginalUrl NVARCHAR, ShortenedUrl NVARCHAR, Description NVARCHAR, CreatedAt DATETIME) END ELSE PRINT 'TABLE ALREADY EXISTS';")
+	tblStmt, tblStmtErr := dbConnection.PrepareContext(context.Background(), "IF OBJECT_ID('dbo.Urls') IS NULL BEGIN CREATE TABLE dbo.Urls (ID INT PRIMARY KEY, OriginalUrl NVARCHAR, ShortenedUrl NVARCHAR, Description NVARCHAR, CreatedAt DATETIME) END ELSE PRINT 'TABLE ALREADY EXISTS';")
 	if tblStmtErr != nil {
 		slog.Error("Failed to create table ", tblStmtErr)
 	}
@@ -61,4 +54,10 @@ func SetupRepositories() {
 	if tblErr != nil {
 		slog.Error("Failed to execute query ", tblErr)
 	}
+
+	db = dbConnection
+}
+
+func PingDB() error {
+	return db.PingContext(context.Background())
 }
