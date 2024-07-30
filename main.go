@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/ujjanth-arhan/tiny-trail-url/repository"
 )
 
 func main() {
@@ -15,7 +14,7 @@ func main() {
 
 	LoadEnvironmentVariables()
 	RegisterRoutes()
-	repository.SetupDatabase()
+	// repository.SetupDatabase()
 
 	slog.Info("Starting server on port " + os.Getenv("PORT") + "!")
 	http.ListenAndServe(":"+os.Getenv("PORT"), nil)
@@ -24,6 +23,6 @@ func main() {
 func LoadEnvironmentVariables() {
 	loadErr := godotenv.Load()
 	if loadErr != nil {
-		slog.Error("Error loading environment variables ", loadErr)
+		slog.Error("Error loading environment variables " + loadErr.Error())
 	}
 }

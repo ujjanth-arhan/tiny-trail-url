@@ -28,3 +28,13 @@ GO
 
 Note: QUIT to quit sqlcmd
 NOte: exit to exit the interactive terminal
+
+
+Future Enchancements:
+- Create utility method for read of body and unmarshall of json
+- Support Database
+- Support migration system
+- Remove background context and use actual ones with support for time out
+- Consider a use case where duplicate URLs might be needed
+- Track remote address
+- Create a distributed UUID generator

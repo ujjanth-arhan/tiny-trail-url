@@ -1,5 +1,5 @@
 package request
 
-type RequestShortenUrl struct {
+type Url struct {
 	Url string `json:"url"`
 }
