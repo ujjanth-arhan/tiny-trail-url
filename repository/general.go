@@ -14,54 +14,79 @@ import (
 var DB *sql.DB
 
 func SetupDatabase() {
-	query := url.Values{}
-	u := &url.URL{
-		Scheme: "sqlserver",
-		User:   url.UserPassword("sa", os.Getenv("DB_SA_PASSWORD")),
+	funcDetails := "Setup Database - "
+	slog.Info("Setting up database...")
+
+	createDatabaseAndUser()
+	createTable()
+
+	if err := DB.PingContext(context.Background()); err != nil {
+		slog.Error(funcDetails + "Failed to connect to DB: " + err.Error())
+	}
+
+}
+
+func createTable() {
+	funcDetails := "Setup Database - createTable "
+
+	conProp := &url.URL{
+		Scheme:   os.Getenv("DB_SCHEME"),
+		User:     url.UserPassword(os.Getenv("DB_SA_NAME"), os.Getenv("DB_SA_PASSWORD")),
+		Host:     fmt.Sprintf("%s:%s", os.Getenv("HOST_NAME"), os.Getenv("DB_PORT")),
+		RawQuery: url.Values(map[string][]string{"database": {os.Getenv("DB_NAME")}}).Encode(),
+	}
+
+	db, err := sql.Open("sqlserver", conProp.String())
+	if err != nil {
+		slog.Error(funcDetails + "Unable to initialize " + os.Getenv("DB_NAME") + " DB connection query " + err.Error())
+	}
+
+	query := `
+		IF OBJECT_ID('dbo.Urls') IS NULL
+		BEGIN
+			CREATE TABLE dbo.Urls
+			(
+				ID INT PRIMARY KEY IDENTITY(1, 1),
+				OriginalUrl NVARCHAR(MAX),
+				ShortenedUrl NVARCHAR(MAX),
+				Description NVARCHAR(MAX),
+				CreatedAt DATETIME NOT NULL
+			)
+		END
+	`
+	tblStmt, err := db.PrepareContext(context.Background(), query)
+	if err != nil {
+		slog.Error(funcDetails + "Failed to prepare Urls table context " + err.Error())
+	}
+
+	if _, err := tblStmt.ExecContext(context.Background()); err != nil {
+		slog.Error(funcDetails + "Failed to execute Urls table creation statement " + err.Error())
+	}
+
+	DB = db
+}
+
+func createDatabaseAndUser() {
+	funcDetails := "Setup Database - createDatabaseAndUser "
+
+	conProp := &url.URL{
+		Scheme: os.Getenv("DB_SCHEME"),
+		User:   url.UserPassword(os.Getenv("DB_SA_NAME"), os.Getenv("DB_SA_PASSWORD")),
 		Host:   fmt.Sprintf("%s:%s", os.Getenv("HOST_NAME"), os.Getenv("DB_PORT")),
 	}
 
-	slog.Info("Query String:" + u.String())
-	dbConnection, initErr := sql.Open("sqlserver", u.String())
-	if initErr != nil {
-		slog.Error("Unable to initialize DB connection query " + initErr.Error())
+	db, err := sql.Open(os.Getenv("DB_DRIVER_NAME"), conProp.String())
+	if err != nil {
+		slog.Error(funcDetails + "Unable to initialize DB connection query " + err.Error())
 	}
 
 	/*
 	* SQL Server does not support parameters for create database query
 	 */
-	_, execErr := dbConnection.ExecContext(context.Background(), fmt.Sprintf("IF DB_ID('%s') IS NULL BEGIN CREATE DATABASE %s END ELSE PRINT 'DATABASE ALREADY EXISTS';", os.Getenv("DB_NAME"), os.Getenv("DB_NAME")))
-	if execErr != nil {
-		slog.Error("Failed to execute query " + execErr.Error())
+	query := fmt.Sprintf("IF DB_ID('%s') IS NULL BEGIN CREATE DATABASE %s END;", os.Getenv("DB_NAME"), os.Getenv("DB_NAME"))
+	if _, err := db.ExecContext(context.Background(), query); err != nil {
+		slog.Error(funcDetails + "Failed to execute query " + err.Error())
 	}
 
-	dbConnection.Close()
-
-	query.Add("database", os.Getenv("DB_NAME"))
-	u.RawQuery = query.Encode()
-
-	dbConnection, initErr = sql.Open("sqlserver", u.String())
-	if initErr != nil {
-		slog.Error("Unable to initialize TT DB connection query " + initErr.Error())
-	}
-
-	tblStmt, tblStmtErr := dbConnection.PrepareContext(context.Background(), "IF OBJECT_ID('dbo.Urls') IS NULL BEGIN CREATE TABLE dbo.Urls (ID INT PRIMARY KEY IDENTITY(1,1), OriginalUrl NVARCHAR(MAX), ShortenedUrl NVARCHAR(MAX), Description NVARCHAR(MAX), CreatedAt DATETIME) END ELSE PRINT 'TABLE ALREADY EXISTS';")
-	if tblStmtErr != nil {
-		slog.Error("Failed to create table " + tblStmtErr.Error())
-	}
-
-	_, tblErr := tblStmt.ExecContext(context.Background())
-	if tblErr != nil {
-		slog.Error("Failed to execute query " + tblErr.Error())
-	}
-
-	DB = dbConnection
-	if err := PingDB(); err != nil {
-		slog.Error("Failed to connect to DB: " + err.Error())
-	}
-
-}
-
-func PingDB() error {
-	return DB.PingContext(context.Background())
+	db.Close()
 }

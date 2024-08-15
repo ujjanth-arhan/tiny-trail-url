@@ -43,8 +43,10 @@ Future Enchancements:
 - Have a shorter URL
 - Support executable file versioning
 - Covert all responses to JSON
-- Change to use prepared context
+- Change to use prepared context (don't forget to do the same in DB setup)
 - Nice way to convert struct to json
 - Change DB schema to prevent non null of created at
 - Code cleanup of repo.setupdatabase
 - Write all errors to a different file
+- Quoted string for DB setup
+- Redirect if opened from a browser
