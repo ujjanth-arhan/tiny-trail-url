@@ -8,7 +8,7 @@ import (
 
 func RegisterRoutes() {
 	http.HandleFunc("POST /shortenurl", handler.HandleShortenUrl)
-	http.HandleFunc("GET /shorturl/{short_url}", handler.HandleFetchByShortUrl)
+	http.HandleFunc("GET /shorturl/{short_url}", handler.HandleGetByShortUrl)
 
 	http.HandleFunc("/{$}", handler.HandleHealthCheck)
 	http.HandleFunc("/health", handler.HandleHealthCheck)

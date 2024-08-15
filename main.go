@@ -3,9 +3,11 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/ujjanth-arhan/tiny-trail-url/repository"
 )
 
 func main() {
@@ -14,15 +16,16 @@ func main() {
 
 	LoadEnvironmentVariables()
 	RegisterRoutes()
-	// repository.SetupDatabase()
+
+	// Todo: Code cleanup of repo.setupdatabase
+	repository.SetupDatabase()
 
 	slog.Info("Starting server on port " + os.Getenv("PORT") + "!")
 	http.ListenAndServe(":"+os.Getenv("PORT"), nil)
 }
 
 func LoadEnvironmentVariables() {
-	loadErr := godotenv.Load()
-	if loadErr != nil {
-		slog.Error("Error loading environment variables " + loadErr.Error())
+	if err := godotenv.Load(); err != nil {
+		slog.Error("Error loading environment variables " + err.Error())
 	}
 }

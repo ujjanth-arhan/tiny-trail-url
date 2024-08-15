@@ -7,31 +7,69 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/ujjanth-arhan/tiny-trail-url/models/request"
+	"github.com/ujjanth-arhan/tiny-trail-url/model/dto"
+	"github.com/ujjanth-arhan/tiny-trail-url/model/entity"
+	"github.com/ujjanth-arhan/tiny-trail-url/model/request"
+	"github.com/ujjanth-arhan/tiny-trail-url/model/response"
 	"github.com/ujjanth-arhan/tiny-trail-url/repository"
 )
 
-func HandleFetchByShortUrl(w http.ResponseWriter, r *http.Request) {
+func HandleGetByShortUrl(w http.ResponseWriter, r *http.Request) {
+	funcDetails := "Handler: HandleGetByShortUrl - "
+	slog.Debug(funcDetails)
+
 	shortUrl := r.PathValue("short_url")
-	longUrl := repository.GetByShortUrl(shortUrl)
-	if len(longUrl) > 0 {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(longUrl))
+	url, err := repository.GetByShortUrl(shortUrl)
+	if err != nil {
+		slog.Error(funcDetails + "Error getting short URL from repository: " + err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetching short URL!"))
 		return
 	}
 
-	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("Requested short URL does not exist!"))
+	if url.Id <= 0 {
+		slog.Debug(funcDetails + "No data found for the given short URL: " + shortUrl)
+
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("No data found for the given short URL!"))
+		return
+	}
+
+	resUrl := response.Url{
+		OriginalUrl:  url.OriginalUrl,
+		ShortenedUrl: url.ShortenedUrl,
+		Description:  url.Description,
+		CreatedAt:    url.CreatedAt,
+	}
+
+	res, err := json.Marshal(resUrl)
+	if err != nil {
+		slog.Error(funcDetails + "Error marshalling JSON: " + err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetching short URL!"))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(res)
 }
 
 func HandleShortenUrl(w http.ResponseWriter, r *http.Request) {
-	rBody, readErr := io.ReadAll(r.Body)
-	if readErr != nil {
-		slog.Debug("Error reading request body: " + readErr.Error())
+	funcDetails := "Handler: Shorten URL - "
+	slog.Debug(funcDetails)
+
+	rBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error(funcDetails + "Error reading request body: " + err.Error())
+
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Error reading request body"))
+		w.Write([]byte("Error reading request data!"))
 		return
 	}
 
@@ -39,35 +77,99 @@ func HandleShortenUrl(w http.ResponseWriter, r *http.Request) {
 
 	var reqUrl request.Url
 	if marshalErr := json.Unmarshal(rBody, &reqUrl); marshalErr != nil {
-		slog.Debug("Error unmarshalling request body: " + marshalErr.Error())
+		slog.Error(funcDetails + "Error unmarshalling request body: " + marshalErr.Error())
+
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Error unmarshalling request body"))
+		w.Write([]byte("Error converting request body to JSON!"))
 		return
 	}
 
-	reqUrl.Url = strings.Trim(reqUrl.Url, " ")
-	shortUrl := repository.GetByUrl(reqUrl.Url)
-	if len(strings.Trim(shortUrl, " ")) != 0 {
-		slog.Debug("Shortened URL already exists: " + shortUrl)
-		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte("Shortened URL already exists: " + shortUrl))
+	reqUrl.OriginalUrl = strings.Trim(reqUrl.OriginalUrl, " ")
+
+	if len(reqUrl.OriginalUrl) == 0 {
+		slog.Debug(funcDetails + "Original URL is empty")
+
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Original URL cannot be empty!"))
 		return
 	}
 
-	shortUrl = shortenUrl()
-	repository.InsertUrl(reqUrl.Url, shortUrl)
+	url, err := repository.GetByOriginalUrl(reqUrl.OriginalUrl)
+	if err != nil {
+		slog.Error(funcDetails + "Error getting original URL: " + err.Error())
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(shortUrl))
-}
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Error converting request body to JSON!"))
+		return
+	}
 
-func shortenUrl() string {
-	uId := uuid.NewString()
-	url := repository.GetByShortUrl(uId)
-	for len(url) > 0 {
+	if url.Id > 0 {
+		slog.Debug(funcDetails + "Shortened URL already exists: " + url.ShortenedUrl)
+
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Shortened URL already exists: " + url.ShortenedUrl))
+		return
+	}
+
+	uId := ""
+	for attempt := 0; attempt < 10; attempt++ {
 		uId = uuid.NewString()
-		url = repository.GetByShortUrl(uId)
+		var checkUrl entity.Url
+		if checkUrl, err = repository.GetByShortUrl(uId); err != nil {
+			slog.Error(funcDetails + "Error getting short URL from repository: " + err.Error())
+
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Error checking for URL's existence!"))
+			return
+		}
+
+		if checkUrl.Id <= 0 {
+			break
+		}
 	}
 
-	return uId
+	dtoUrl := dto.Url{
+		OriginalUrl:  reqUrl.OriginalUrl,
+		ShortenedUrl: uId,
+		Description:  reqUrl.Description,
+		CreatedAt:    time.Now().UTC(),
+	}
+
+	id, err := repository.InsertUrl(dtoUrl)
+	if err != nil {
+		slog.Error(funcDetails + "Error inserting URL data: " + err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error adding URL data!"))
+		return
+	}
+
+	repoUrl, err := repository.GetById(id)
+	if err != nil {
+		slog.Error(funcDetails + "Error getting URL data by id: " + err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error getting URL data!"))
+		return
+	}
+
+	resUrl := response.Url{
+		OriginalUrl:  repoUrl.OriginalUrl,
+		ShortenedUrl: repoUrl.ShortenedUrl,
+		Description:  repoUrl.Description,
+		CreatedAt:    repoUrl.CreatedAt,
+	}
+
+	res, err := json.Marshal(resUrl)
+	if err != nil {
+		slog.Error(funcDetails + "Error marshalling JSON: " + err.Error())
+
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetching short URL!"))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(res)
 }

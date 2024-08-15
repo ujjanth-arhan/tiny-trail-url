@@ -38,3 +38,13 @@ Future Enchancements:
 - Consider a use case where duplicate URLs might be needed
 - Track remote address
 - Create a distributed UUID generator
+- Support swagger
+- Support docker container deployment
+- Have a shorter URL
+- Support executable file versioning
+- Covert all responses to JSON
+- Change to use prepared context
+- Nice way to convert struct to json
+- Change DB schema to prevent non null of created at
+- Code cleanup of repo.setupdatabase
+- Write all errors to a different file

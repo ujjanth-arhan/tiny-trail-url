@@ -45,7 +45,7 @@ func SetupDatabase() {
 		slog.Error("Unable to initialize TT DB connection query " + initErr.Error())
 	}
 
-	tblStmt, tblStmtErr := dbConnection.PrepareContext(context.Background(), "IF OBJECT_ID('dbo.Urls') IS NULL BEGIN CREATE TABLE dbo.Urls (ID INT PRIMARY KEY, OriginalUrl NVARCHAR, ShortenedUrl NVARCHAR, Description NVARCHAR, CreatedAt DATETIME) END ELSE PRINT 'TABLE ALREADY EXISTS';")
+	tblStmt, tblStmtErr := dbConnection.PrepareContext(context.Background(), "IF OBJECT_ID('dbo.Urls') IS NULL BEGIN CREATE TABLE dbo.Urls (ID INT PRIMARY KEY IDENTITY(1,1), OriginalUrl NVARCHAR(MAX), ShortenedUrl NVARCHAR(MAX), Description NVARCHAR(MAX), CreatedAt DATETIME) END ELSE PRINT 'TABLE ALREADY EXISTS';")
 	if tblStmtErr != nil {
 		slog.Error("Failed to create table " + tblStmtErr.Error())
 	}
@@ -56,6 +56,10 @@ func SetupDatabase() {
 	}
 
 	DB = dbConnection
+	if err := PingDB(); err != nil {
+		slog.Error("Failed to connect to DB: " + err.Error())
+	}
+
 }
 
 func PingDB() error {

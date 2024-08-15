@@ -1,57 +1,205 @@
 package repository
 
-var urls map[string]string = make(map[string]string)
+import (
+	"context"
+	"database/sql"
+	"log/slog"
 
-func GetByUrl(url string) string {
-	for k, v := range urls {
-		if v == url {
-			return k
+	"github.com/ujjanth-arhan/tiny-trail-url/model/dto"
+	"github.com/ujjanth-arhan/tiny-trail-url/model/entity"
+)
+
+func GetById(id int) (entity.Url, error) {
+	funcDetails := "Repository: GetById - "
+	slog.Debug(funcDetails)
+
+	query := `
+		SELECT
+			Id,
+			OriginalUrl,
+			ShortenedUrl,
+			Description,
+			CreatedAt
+		FROM Urls WITH (NOLOCK)
+		WHERE Id = @id
+	`
+
+	// Check for SQL injection and Change to prepared context
+	rows, err := DB.QueryContext(context.Background(), query, sql.Named("id", id))
+	if err != nil {
+		slog.Error(funcDetails + "Error trying to query by id of url: " + err.Error())
+
+		return entity.Url{}, err
+	}
+
+	defer rows.Close()
+
+	var url entity.Url
+	for rows.Next() {
+		var (
+			desc    sql.NullString
+			crtedAt sql.NullTime
+		)
+		if err := rows.Scan(&url.Id, &url.OriginalUrl, &url.ShortenedUrl, &desc, &crtedAt); err != nil {
+			slog.Error(funcDetails + "Error scaning rows: " + err.Error())
+
+			return url, err
+		}
+
+		if desc.Valid {
+			url.Description = desc.String
+		}
+
+		if crtedAt.Valid {
+			url.CreatedAt = crtedAt.Time
 		}
 	}
 
-	return ""
+	return url, nil
 }
 
-func GetByShortUrl(shortUrl string) string {
-	return urls[shortUrl]
-}
+func GetByOriginalUrl(originalUrl string) (entity.Url, error) {
+	funcDetails := "Repository: GetByOriginalUrl - "
+	slog.Debug(funcDetails)
 
-func InsertUrl(longUrl, shortUrl string) {
-	urls[shortUrl] = longUrl
-}
+	query := `
+		SELECT
+			Id,
+			OriginalUrl,
+			ShortenedUrl,
+			Description,
+			CreatedAt
+		FROM Urls WITH (NOLOCK)
+		WHERE OriginalUrl = @originalUrl
+	`
 
-/*
-func GetByUrl(url string) ([]entity.Url, error) {
-	rrows, err := DB.QueryContext(context.Background(), `SELECT Id, ShortenedUrl, OriginalUrl FROM Url WHERE OriginalUrl = `+url)
+	// Check for SQL injection and Change to prepared context
+	rows, err := DB.QueryContext(context.Background(), query, sql.Named("originalUrl", originalUrl))
 	if err != nil {
-		slog.Error("Failed to fetch URLs " + err.Error())
-		return nil, err
+		slog.Error(funcDetails + "Error trying to query by original url: " + err.Error())
+
+		return entity.Url{}, err
 	}
 
-	rrows.Close()
+	defer rows.Close()
 
-	rows := make([]entity.Url, 0)
-	for rrows.Next() {
-		row := entity.Url{}
-		if err = rrows.Scan(&row); err != nil {
-			slog.Error("Failed to read URL row " + err.Error())
-			return nil, err
+	var url entity.Url
+	for rows.Next() {
+		var (
+			desc    sql.NullString
+			crtedAt sql.NullTime
+		)
+		if err := rows.Scan(&url.Id, &url.OriginalUrl, &url.ShortenedUrl, &desc, &crtedAt); err != nil {
+			slog.Error(funcDetails + "Error scaning rows: " + err.Error())
+
+			return url, err
 		}
 
-		rows = append(rows, row)
+		if desc.Valid {
+			url.Description = desc.String
+		}
+
+		if crtedAt.Valid {
+			url.CreatedAt = crtedAt.Time
+		}
 	}
 
-	return rows, nil
+	return url, nil
 }
 
-func InsertUrl(url entity.Url) (int64, error) {
-	res, err := DB.ExecContext(context.Background(), "INSERT INTO dbo.Url VALUES(?, ?, ?, ?, ?)", url)
+func GetByShortUrl(shortUrl string) (entity.Url, error) {
+	funcDetails := "Repository: GetByShortUrl - "
+	slog.Debug(funcDetails)
+
+	query := `
+		SELECT
+			Id,
+			OriginalUrl,
+			ShortenedUrl,
+			Description,
+			CreatedAt
+		FROM Urls WITH (NOLOCK)
+		WHERE ShortenedUrl = @shortUrl
+	`
+
+	// Change to prepared context
+	rows, err := DB.QueryContext(context.Background(), query, sql.Named("shortUrl", shortUrl))
 	if err != nil {
-		slog.Error(fmt.Sprintf("Failed to insert value to URLs table %v ", url))
-		return -1, err
+		slog.Error(funcDetails + "Error trying to query by short url: " + err.Error())
+
+		return entity.Url{}, err
 	}
 
-	rowId, _ := res.LastInsertId()
-	return rowId, err
+	defer rows.Close()
+
+	var url entity.Url
+	if rows.Next() {
+		var (
+			desc    sql.NullString
+			crtedAt sql.NullTime
+		)
+		if err := rows.Scan(&url.Id, &url.OriginalUrl, &url.ShortenedUrl, &desc, &crtedAt); err != nil {
+			slog.Error(funcDetails + "Error scaning rows: " + err.Error())
+
+			return url, err
+		}
+
+		if desc.Valid {
+			url.Description = desc.String
+		}
+
+		if crtedAt.Valid {
+			url.CreatedAt = crtedAt.Time
+		}
+	}
+
+	return url, nil
 }
-*/
+
+func InsertUrl(url dto.Url) (int, error) {
+	funcDetails := "Repository: InsertUrl - "
+	slog.Debug(funcDetails)
+
+	query := `
+		INSERT INTO Urls (
+			OriginalUrl,
+			ShortenedUrl,
+			Description,
+			CreatedAt
+		)
+		OUTPUT INSERTED.ID
+		VALUES (
+			@originalUrl,
+			@shortenedUrl,
+			@description,
+			@createdAt
+		)
+	`
+
+	var (
+		err   error
+		rows  *sql.Rows
+		rowId int
+	)
+
+	if rows, err = DB.QueryContext(
+		context.Background(),
+		query,
+		sql.Named("originalUrl", url.OriginalUrl),
+		sql.Named("shortenedUrl", url.ShortenedUrl),
+		sql.Named("description", url.Description),
+		sql.Named("createdAt", url.CreatedAt)); err != nil {
+
+		slog.Error(funcDetails + "Failed to INSERT URL: " + err.Error())
+
+		return rowId, err
+	}
+
+	defer rows.Close()
+
+	if rows.Next() {
+		rows.Scan(&rowId)
+	}
+
+	return rowId, nil
+}

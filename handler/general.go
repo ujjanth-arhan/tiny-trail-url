@@ -6,7 +6,8 @@ import (
 )
 
 func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Health check")
+	slog.Info("Handler: Health check")
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Server is running!"))
 }
